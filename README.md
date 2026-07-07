@@ -8,29 +8,30 @@ Using the included installer script, you can easily install the agent, configure
 
 ## 🚀 Quick Setup Instructions
 
-### Step 1: Clone or Copy the Installer to Termux
+### Option A: 1-Click Install (Recommended)
+Open **Termux** on your Android device and paste:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/AbuZar-Ansarii/Hermes-Phone-Control/master/install.sh | bash
+```
+
+---
+
+### Option B: Manual Git Clone Setup
 Open **Termux** on your Android device and run:
 
 ```bash
 # 1. Ensure git is installed to retrieve the script
 pkg install git -y
 
-# 2. Clone your repository (replace with your repo URL if using a private fork)
+# 2. Clone your repository
 git clone https://github.com/AbuZar-Ansarii/Hermes-Phone-Control.git "$HOME/Hermes-Phone-Control"
 
 # 3. Navigate into the repository directory
 cd "$HOME/Hermes-Phone-Control"
 
-# 4. Make the installation script executable
+# 4. Make the installation script executable and run it
 chmod +x install.sh
-```
-
----
-
-### Step 2: Run the Installation Script
-Execute the script to start the setup process:
-
-```bash
 ./install.sh
 ```
 
