@@ -82,6 +82,7 @@ DEPS=(
     "ffmpeg"
     "termux-api"
     "android-tools"
+    "nmap"
 )
 
 log_info "Installing packages: ${DEPS[*]}"
@@ -190,6 +191,44 @@ else
         log_warn "Failed to download phone-control helper. Skipping."
     fi
 fi
+
+# 9ca. Install shizuku auto-connector in $PREFIX/bin
+log_info "Installing shizuku auto-connector in $PREFIX/bin..."
+SHIZUKU_HELPER_PATH="$PREFIX/bin/shizuku"
+rm -f "$SHIZUKU_HELPER_PATH"
+
+if [ -f "$SCRIPT_DIR/shizuku" ]; then
+    cp "$SCRIPT_DIR/shizuku" "$SHIZUKU_HELPER_PATH"
+    chmod +x "$SHIZUKU_HELPER_PATH"
+    log_success "shizuku auto-connector installed successfully at $SHIZUKU_HELPER_PATH."
+else
+    log_info "shizuku local file not found. Downloading from repository..."
+    if curl -fsSL "https://raw.githubusercontent.com/AbuZar-Ansarii/Hermes-Phone-Control/master/shizuku" -o "$SHIZUKU_HELPER_PATH"; then
+        chmod +x "$SHIZUKU_HELPER_PATH"
+        log_success "shizuku auto-connector downloaded and installed successfully at $SHIZUKU_HELPER_PATH."
+    else
+        log_warn "Failed to download shizuku auto-connector. Skipping."
+    fi
+fi
+
+# 9cb. Deploy Hermes custom phone-control skill
+log_info "Deploying custom phone-control skill for Hermes..."
+SKILLS_DIR="$HOME/.hermes/skills/phone-control"
+mkdir -p "$SKILLS_DIR"
+SKILL_DEST="$SKILLS_DIR/SKILL.md"
+
+if [ -f "$SCRIPT_DIR/skills/phone-control/SKILL.md" ]; then
+    cp "$SCRIPT_DIR/skills/phone-control/SKILL.md" "$SKILL_DEST"
+    log_success "Custom phone-control skill deployed successfully to $SKILL_DEST."
+else
+    log_info "SKILL.md local file not found. Downloading from repository..."
+    if curl -fsSL "https://raw.githubusercontent.com/AbuZar-Ansarii/Hermes-Phone-Control/master/skills/phone-control/SKILL.md" -o "$SKILL_DEST"; then
+        log_success "Custom phone-control skill downloaded and deployed successfully to $SKILL_DEST."
+    else
+        log_warn "Failed to deploy custom phone-control skill. Skipping."
+    fi
+fi
+
 
 # 9d. Verify Shizuku authorization
 log_info "Verifying Shizuku rish configuration..."

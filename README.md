@@ -36,15 +36,17 @@ Execute the script to start the setup process:
 
 #### What the script does:
 1. Updates Termux package repositories.
-2. Installs required native libraries (`git`, `python`, `clang`, `rust`, `make`, `pkg-config`, `libffi`, `openssl`, `nodejs`, `ripgrep`, `ffmpeg`, `android-tools`).
+2. Installs required native libraries (`git`, `python`, `clang`, `rust`, `make`, `pkg-config`, `libffi`, `openssl`, `nodejs`, `ripgrep`, `ffmpeg`, `android-tools`, `nmap`).
 3. Installs `termux-api` for Android operating system integration.
 4. Clones the official `NousResearch/hermes-agent` codebase into `$HOME/hermes-agent`.
 5. Creates a Python virtual environment (`venv`).
 6. Prebuilds the Android-compatible `psutil` compatibility shim to avoid build errors.
 7. Installs the Hermes package with optimal Termux baseline or extended profiles.
-8. Sets up a user wrapper command `hermes` in `$PREFIX/bin` so you can launch it from anywhere.
+8. Sets up a user wrapper command `hermes` in `$PREFIX/bin`.
 9. Installs the Shizuku `rish` wrapper using the silent native C installer.
-10. Installs the custom `phone-control` script helper in `$PREFIX/bin` to allow advanced device control.
+10. Installs the `shizuku` auto-connector utility (`$PREFIX/bin/shizuku`) to start the daemon in one click.
+11. Installs the custom `phone-control` script helper in `$PREFIX/bin/phone-control` to execute advanced device actions.
+12. Deploys the custom phone-control skill to `~/.hermes/skills/phone-control/SKILL.md` to give Hermes native instruction awareness.
 
 ---
 
@@ -65,26 +67,28 @@ You will be prompted to:
 
 ## 📱 Advanced Phone Control via Shizuku & Termux:API
 
-By combining **Shizuku (Wireless Debugging)** with **Termux:API**, you can grant Hermes Agent complete, high-privilege programmatic access to your phone (such as opening apps, clicking elements on the screen, typing, taking screenshots, and playing music).
+By combining **Shizuku (Wireless Debugging)** with **Termux:API**, you can grant Hermes Agent complete, high-privilege programmatic access to your phone (such as toggling Wi-Fi, opening apps, clicking elements on the screen, typing, taking screenshots, and playing music).
 
 ---
 
-### Part 1: Setting up Shizuku Wireless Debugging
+### Part 1: Setting up Shizuku (Zero-Root / Auto-Connect)
 
 To allow Hermes to perform touch actions and manage applications:
 
 1. **Install Shizuku App**: Download and install [Shizuku from Google Play Store](https://play.google.com/store/apps/details?id=moe.shizuku.privileged.api) or GitHub.
 2. **Enable Developer Options**: Go to Android Settings -> About Phone -> Tap **Build Number** 7 times.
 3. **Enable Wireless Debugging**: Go to Developer Options -> Toggle on **Wireless Debugging**.
-4. **Pair & Start Shizuku**:
-   - Open Shizuku, tap **Pairing**, then **Developer Options**.
-   - Tap **Wireless Debugging** -> **Pair device with pairing code**.
-   - Enter the pairing code in the Shizuku notification box.
-   - Go back to Shizuku's main screen and tap **Start**.
-5. **Authorize Termux**:
-   - Inside Termux, run `rish` once.
-   - A system popup will appear asking to authorize Termux. Tap **Allow** (or **Always Allow**).
-   - Type `exit` to return to your Termux shell.
+4. **Automated Shizuku Launch**:
+   - Turn on Wireless Debugging.
+   - In Termux, type:
+     ```bash
+     shizuku
+     ```
+   - This script automatically scans your local device port range (30000-50000) using `nmap`, connects local ADB, starts the Shizuku app daemon, and shuts down Wireless Debugging to conserve battery.
+5. **One-Time Termux Authorization**:
+   - In Termux, type `rish` once.
+   - When the system dialog asks to authorize Termux access, tap **Allow / Always Allow**.
+   - Type `exit` to return to your normal Termux prompt.
 
 ---
 
@@ -96,7 +100,10 @@ Our installer configures a custom `phone-control` wrapper script. Hermes Agent c
 *   **Tap coordinates**: `phone-control tap <x> <y>`
 *   **Swipe/Scroll**: `phone-control swipe <x1> <y1> <x2> <y2> [duration_ms]`
 *   **Type text**: `phone-control text "Your text here"` (handles spaces automatically)
-*   **Hardware keys**: `phone-control home`, `phone-control back`, `phone-control enter`
+*   **Hardware keys**: `phone-control home`, `phone-control back`, `phone-control enter`, `phone-control recent`
+*   **Toggle Power/Lock**: `phone-control power`
+*   **Wake up screen**: `phone-control screenon`
+*   **Toggle WiFi**: `phone-control wifi <on/off>`
 *   **Press keyevent**: `phone-control key <keycode>`
 *   **Open App**: `phone-control open <package_name>`
     *   *Example*: `phone-control open com.google.android.youtube`
@@ -107,6 +114,14 @@ Our installer configures a custom `phone-control` wrapper script. Hermes Agent c
 *   **Play Song on YouTube**: `phone-control play-yt "<song or artist>"`
     *   *Launches YouTube, searches for the song, and automatically locates and taps the first search result.*
 *   **Screenshot**: `phone-control screenshot <path>`
+*   **Arbitrary ADB commands**: `phone-control shell "<command_string>"`
+
+---
+
+### Part 3: Hermes Skill Integration
+
+During the installation process, a custom Hermes skill is deployed to `~/.hermes/skills/phone-control/SKILL.md`. This gives the Hermes Agent direct, cognitive awareness of the `phone-control` toolset, teaching it how to loop commands, analyze screen states, and navigate the Android environment autonomously.
+
 
 ---
 

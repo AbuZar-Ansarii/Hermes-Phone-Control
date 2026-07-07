@@ -21,11 +21,16 @@ show_help() {
     echo "  home                                Press Home button"
     echo "  back                                Press Back button"
     echo "  enter                               Press Enter key"
+    echo "  recent                              Show recent applications"
+    echo "  power                               Toggle power button / lock screen"
+    echo "  screenon                            Wake up the device screen"
+    echo "  wifi <on/off>                       Toggle Wi-Fi connection"
     echo "  open <package_name>                 Launch an app by package name"
     echo "  read-screen                         Dump screen text and bounds to terminal"
     echo "  tap-element <pattern>               Search screen for text/ID matching pattern and tap it"
     echo "  play-yt <query>                     Search YouTube and play the first result"
     echo "  screenshot <path>                   Take a screenshot and save it to <path> in Termux"
+    echo "  shell <command>                     Execute arbitrary ADB shell command"
 }
 
 # Ensure rish is available
@@ -90,6 +95,30 @@ case "$CMD" in
         
     enter)
         rish -c "input keyevent 66"
+        ;;
+
+    recent)
+        rish -c "input keyevent 187"
+        ;;
+
+    power)
+        rish -c "input keyevent 26"
+        ;;
+
+    screenon)
+        rish -c "input keyevent 224"
+        ;;
+
+    wifi)
+        if [ $# -lt 2 ]; then
+            echo "Usage: phone-control wifi <on/off>"
+            exit 1
+        fi
+        if [ "$2" = "on" ]; then
+            rish -c "svc wifi enable"
+        else
+            rish -c "svc wifi disable"
+        fi
         ;;
         
     open)
@@ -206,6 +235,15 @@ case "$CMD" in
         rish -c "screencap -p /data/local/tmp/screen.png"
         rish -c "cat /data/local/tmp/screen.png" > "$output_path"
         echo "Screenshot saved to $output_path"
+        ;;
+
+    shell)
+        if [ $# -lt 2 ]; then
+            echo "Usage: phone-control shell <command_string>"
+            exit 1
+        fi
+        shift
+        rish -c "$*"
         ;;
         
     *)

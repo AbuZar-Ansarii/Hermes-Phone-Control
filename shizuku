@@ -1,0 +1,103 @@
+#!/usr/bin/env bash
+# ============================================================================
+# Shizuku Automated Wireless Debugging Connector
+# ============================================================================
+# Scans for open local ADB ports and starts the Shizuku daemon automatically.
+# ============================================================================
+
+set -e
+
+# Colors for log formatting
+CYAN='\033[0;36m'
+GREEN='\033[0;32m'
+RED='\033[0;31m'
+YELLOW='\033[0;33m'
+NC='\033[0m'
+
+log_info() {
+    echo -e "${CYAN}→${NC} $1"
+}
+
+log_success() {
+    echo -e "${GREEN}✓${NC} $1"
+}
+
+log_error() {
+    echo -e "${RED}✗${NC} $1"
+}
+
+log_warn() {
+    echo -e "${YELLOW}⚠${NC} $1"
+}
+
+# Ensure dependencies are available
+if ! command -v nmap &> /dev/null; then
+    log_error "nmap is not installed. Please run install.sh first."
+    exit 1
+fi
+
+if ! command -v adb &> /dev/null; then
+    log_error "android-tools (adb) is not installed. Please run install.sh first."
+    exit 1
+fi
+
+log_info "Scanning local ports (30000-50000) for Wireless Debugging..."
+
+# Detect open local ports
+ports=$(nmap -sT -p30000-50000 --open localhost 2>/dev/null | grep "open" | cut -f1 -d/ || true)
+
+if [ -z "$ports" ]; then
+    log_error "No open Wireless Debugging ports found on localhost."
+    log_warn "Please ensure Wireless Debugging is enabled and active in Developer Options."
+    exit 1
+fi
+
+# Try connecting to detected ports
+connected=false
+for port in ${ports}; do
+    log_info "Attempting to connect to localhost:${port}..."
+    # adb connect outputs text, check for "connected" or "already"
+    result=$(adb connect "localhost:${port}" 2>/dev/null || echo "")
+    if [[ "$result" =~ "connected" || "$result" =~ "already" ]]; then
+        log_success "Successfully connected to ADB on port ${port}!"
+        connected=true
+        break
+    fi
+done
+
+if [ "$connected" = false ]; then
+    log_error "Could not establish connection to local ADB."
+    exit 1
+fi
+
+# Detect device architecture for correct Shizuku helper library path
+ARCH=$(getprop ro.product.cpu.abi 2>/dev/null || echo "arm64-v8a")
+case "$ARCH" in
+  arm64*) LIB_ARCH="arm64" ;;
+  armeabi*) LIB_ARCH="arm" ;;
+  x86_64*) LIB_ARCH="x86_64" ;;
+  x86*) LIB_ARCH="x86" ;;
+  *) LIB_ARCH="arm64" ;;
+esac
+
+log_info "Launching Shizuku service (Architecture: ${LIB_ARCH})..."
+
+# Launch Shizuku daemon via ADB
+SHIZUKU_PATH=$(adb shell pm path moe.shizuku.privileged.api 2>/dev/null | sed 's/^package://;s/base\.apk/lib\/'${LIB_ARCH}'\/libshizuku\.so/' || echo "")
+
+if [ -z "$SHIZUKU_PATH" ]; then
+    log_error "Shizuku app is not installed on this device. Please install it first."
+    exit 1
+fi
+
+# Execute startup
+if adb shell "$SHIZUKU_PATH"; then
+    log_success "Shizuku service started successfully!"
+    
+    # Disable wireless debugging to save battery
+    adb shell settings put global adb_wifi_enabled 0 2>/dev/null || true
+    log_info "Wireless Debugging disabled to conserve battery."
+else
+    log_error "Failed to launch Shizuku daemon."
+    exit 1
+fi
