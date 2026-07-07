@@ -182,7 +182,13 @@ if [ -f "$SCRIPT_DIR/phone-control" ]; then
     chmod +x "$CONTROL_HELPER_PATH"
     log_success "phone-control helper installed successfully at $CONTROL_HELPER_PATH."
 else
-    log_warn "phone-control source file not found at $SCRIPT_DIR/phone-control. Skipping."
+    log_info "phone-control local file not found. Downloading from repository..."
+    if curl -fsSL "https://raw.githubusercontent.com/AbuZar-Ansarii/Hermes-Phone-Control/master/phone-control" -o "$CONTROL_HELPER_PATH"; then
+        chmod +x "$CONTROL_HELPER_PATH"
+        log_success "phone-control helper downloaded and installed successfully at $CONTROL_HELPER_PATH."
+    else
+        log_warn "Failed to download phone-control helper. Skipping."
+    fi
 fi
 
 # 9d. Verify Shizuku authorization
