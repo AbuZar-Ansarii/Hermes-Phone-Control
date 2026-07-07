@@ -1,0 +1,216 @@
+#!/usr/bin/env bash
+# ============================================================================
+# Phone Control Helper for Hermes Agent (Shizuku Edition)
+# ============================================================================
+# Provides an abstract, simple interface for Hermes to control the Android phone.
+# Runs commands using the local Shizuku service via 'rish'.
+# ============================================================================
+
+set -e
+
+# Help documentation
+show_help() {
+    echo "Phone Control Helper (via Shizuku)"
+    echo "Usage: phone-control <command> [arguments...]"
+    echo ""
+    echo "Commands:"
+    echo "  tap <x> <y>                         Tap screen at (x, y)"
+    echo "  swipe <x1> <y1> <x2> <y2> [ms]      Swipe from (x1, y1) to (x2, y2) in ms (default: 300)"
+    echo "  text <text>                         Type text (spaces handled automatically)"
+    echo "  key <keycode>                       Press key event (e.g. 3=Home, 4=Back, 66=Enter)"
+    echo "  home                                Press Home button"
+    echo "  back                                Press Back button"
+    echo "  enter                               Press Enter key"
+    echo "  open <package_name>                 Launch an app by package name"
+    echo "  read-screen                         Dump screen text and bounds to terminal"
+    echo "  tap-element <pattern>               Search screen for text/ID matching pattern and tap it"
+    echo "  play-yt <query>                     Search YouTube and play the first result"
+    echo "  screenshot <path>                   Take a screenshot and save it to <path> in Termux"
+}
+
+# Ensure rish is available
+if ! command -v rish &> /dev/null; then
+    echo "Error: Shizuku 'rish' wrapper not found." >&2
+    echo "Please ensure Shizuku is running and rish is installed in Termux." >&2
+    exit 1
+fi
+
+# Ensure we have at least one argument
+if [ $# -lt 1 ]; then
+    show_help
+    exit 1
+fi
+
+CMD="$1"
+
+case "$CMD" in
+    tap)
+        if [ $# -lt 3 ]; then
+            echo "Usage: phone-control tap <x> <y>"
+            exit 1
+        fi
+        rish -c "input tap $2 $3"
+        ;;
+        
+    swipe)
+        if [ $# -lt 5 ]; then
+            echo "Usage: phone-control swipe <x1> <y1> <x2> <y2> [duration_ms]"
+            exit 1
+        fi
+        DURATION="${6:-300}"
+        rish -c "input swipe $2 $3 $4 $5 $DURATION"
+        ;;
+        
+    text)
+        if [ $# -lt 2 ]; then
+            echo "Usage: phone-control text <text>"
+            exit 1
+        fi
+        shift
+        # Replace space with %s for older/standard input tool compatibility
+        text_encoded=$(echo "$*" | sed 's/ /%s/g')
+        rish -c "input text '$text_encoded'"
+        ;;
+        
+    key)
+        if [ $# -lt 2 ]; then
+            echo "Usage: phone-control key <keycode>"
+            exit 1
+        fi
+        rish -c "input keyevent $2"
+        ;;
+        
+    home)
+        rish -c "input keyevent 3"
+        ;;
+        
+    back)
+        rish -c "input keyevent 4"
+        ;;
+        
+    enter)
+        rish -c "input keyevent 66"
+        ;;
+        
+    open)
+        if [ $# -lt 2 ]; then
+            echo "Usage: phone-control open <package_name>"
+            exit 1
+        fi
+        echo "Opening package: $2"
+        rish -c "monkey -p $2 -c android.intent.category.LAUNCHER 1" >/dev/null 2>&1 || {
+            # Fallback launch via am start if monkey fails
+            rish -c "am start -n $2" >/dev/null 2>&1
+        }
+        ;;
+        
+    read-screen)
+        rish -c "uiautomator dump /data/local/tmp/window_dump.xml" >/dev/null 2>&1
+        xml_content=$(rish -c "cat /data/local/tmp/window_dump.xml" || echo "")
+        if [ -z "$xml_content" ]; then
+            echo "Error: Failed to retrieve screen XML. Is Shizuku authorized?" >&2
+            exit 1
+        fi
+        # Parse XML, find nodes with text or content-desc, output center coordinates
+        echo "$xml_content" | grep -o -E '<node[^>]*bounds="[^"]+"' | while read -r line; do
+            txt=$(echo "$line" | grep -o -E 'text="[^"]*"' | cut -d'"' -f2)
+            desc=$(echo "$line" | grep -o -E 'content-desc="[^"]*"' | cut -d'"' -f2)
+            res_id=$(echo "$line" | grep -o -E 'resource-id="[^"]*"' | cut -d'"' -f2 | awk -F'/' '{print $NF}')
+            bounds=$(echo "$line" | grep -o -E 'bounds="[^"]*"' | cut -d'"' -f2)
+            
+            if [ -n "$txt" ] || [ -n "$desc" ]; then
+                coords=$(echo "$bounds" | tr -d '[]' | tr ',' ' ')
+                read -r left top right bottom <<< "$coords"
+                x=$(( (left + right) / 2 ))
+                y=$(( (top + bottom) / 2 ))
+                echo "[$x, $y] ID: $res_id | Text: \"$txt\" | Desc: \"$desc\""
+            fi
+        done
+        ;;
+        
+    tap-element)
+        if [ $# -lt 2 ]; then
+            echo "Usage: phone-control tap-element <pattern>"
+            exit 1
+        fi
+        shift
+        pattern="$*"
+        
+        rish -c "uiautomator dump /data/local/tmp/window_dump.xml" >/dev/null 2>&1
+        xml_content=$(rish -c "cat /data/local/tmp/window_dump.xml" || echo "")
+        if [ -z "$xml_content" ]; then
+            echo "Error: Failed to retrieve screen XML." >&2
+            exit 1
+        fi
+        
+        matching_node=$(echo "$xml_content" | grep -o -E '<node[^>]*bounds="[^"]+"' | grep -i -E "$pattern" | head -n 1 || echo "")
+        if [ -z "$matching_node" ]; then
+            echo "Error: No matching element found for pattern '$pattern'." >&2
+            exit 1
+        fi
+        
+        bounds=$(echo "$matching_node" | grep -o -E 'bounds="[^"]*"' | cut -d'"' -f2)
+        coords=$(echo "$bounds" | tr -d '[]' | tr ',' ' ')
+        read -r left top right bottom <<< "$coords"
+        x=$(( (left + right) / 2 ))
+        y=$(( (top + bottom) / 2 ))
+        
+        echo "Found element matching '$pattern' at ($x, $y). Tapping..."
+        rish -c "input tap $x $y"
+        ;;
+        
+    play-yt)
+        if [ $# -lt 2 ]; then
+            echo "Usage: phone-control play-yt <search_query>"
+            exit 1
+        fi
+        shift
+        query="$*"
+        
+        # URL encode using python since python is installed by the installer
+        encoded=$(python3 -c "import sys, urllib.parse; print(urllib.parse.quote(sys.argv[1]))" "$query" 2>/dev/null || python -c "import sys, urllib.parse; print(urllib.parse.quote(sys.argv[1]))" "$query")
+        
+        echo "Searching YouTube for: $query"
+        rish -c "am start -a android.intent.action.VIEW -d 'https://www.youtube.com/results?search_query=$encoded'" >/dev/null 2>&1
+        
+        echo "Waiting for results (5 seconds)..."
+        sleep 5
+        
+        rish -c "uiautomator dump /data/local/tmp/window_dump.xml" >/dev/null 2>&1
+        xml_content=$(rish -c "cat /data/local/tmp/window_dump.xml" || echo "")
+        
+        # Find video element inside YouTube search results
+        matching_node=$(echo "$xml_content" | grep -o -E '<node[^>]*bounds="[^"]+"' | grep -E 'com.google.android.youtube:id/title|com.google.android.youtube:id/video_info_view|com.google.android.youtube:id/thumbnail' | head -n 1 || echo "")
+        
+        if [ -n "$matching_node" ]; then
+            bounds=$(echo "$matching_node" | grep -o -E 'bounds="[^"]*"' | cut -d'"' -f2)
+            coords=$(echo "$bounds" | tr -d '[]' | tr ',' ' ')
+            read -r left top right bottom <<< "$coords"
+            x=$(( (left + right) / 2 ))
+            y=$(( (top + bottom) / 2 ))
+            echo "Found video title in dump. Tapping at ($x, $y)..."
+            rish -c "input tap $x $y"
+        else
+            # Tap fallback coordinates for the first video position on standard portrait layout
+            echo "Video element not found in dump. Tapping fallback position (540, 750)..."
+            rish -c "input tap 540 750"
+        fi
+        ;;
+        
+    screenshot)
+        if [ $# -lt 2 ]; then
+            echo "Usage: phone-control screenshot <output_path>"
+            exit 1
+        fi
+        output_path="$2"
+        rish -c "screencap -p /data/local/tmp/screen.png"
+        rish -c "cat /data/local/tmp/screen.png" > "$output_path"
+        echo "Screenshot saved to $output_path"
+        ;;
+        
+    *)
+        echo "Unknown command: $CMD" >&2
+        show_help
+        exit 1
+        ;;
+esac
